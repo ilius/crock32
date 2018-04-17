@@ -15,48 +15,60 @@ import (
 var bigRadix = big.NewInt(32)
 var bigZero = big.NewInt(0)
 
-// Decode decodes a modified base32 string to a byte slice.
-func Decode(b string) ([]byte, error) {
-	answer := big.NewInt(0)
+func decode(s string) ([]byte, *big.Int, error) {
+	bigVal := big.NewInt(0)
 	j := big.NewInt(1)
 
 	scratch := new(big.Int)
-	for i := len(b) - 1; i >= 0; i-- {
-		tmp := b32[b[i]]
+	for i := len(s) - 1; i >= 0; i-- {
+		tmp := b32[s[i]]
 		if tmp == 255 {
-			return nil, fmt.Errorf("error in Decode: invalid character %#v", b[i])
+			return nil, nil, fmt.Errorf("error in Decode: invalid character %#v", string(s[i]))
 		}
 		scratch.SetInt64(int64(tmp))
 		scratch.Mul(j, scratch)
-		answer.Add(answer, scratch)
+		bigVal.Add(bigVal, scratch)
 		j.Mul(j, bigRadix)
 	}
 
-	tmpval := answer.Bytes()
+	tmpBytes := bigVal.Bytes()
 
 	var numZeros int
-	for numZeros = 0; numZeros < len(b); numZeros++ {
-		if b[numZeros] != alphabetIdx0 {
+	for numZeros = 0; numZeros < len(s); numZeros++ {
+		if s[numZeros] != alphabetIdx0 {
 			break
 		}
 	}
-	flen := numZeros + len(tmpval)
-	val := make([]byte, flen)
-	copy(val[numZeros:], tmpval)
+	flen := numZeros + len(tmpBytes)
+	output := make([]byte, flen)
+	copy(output[numZeros:], tmpBytes)
 
-	return val, nil
+	return output, bigVal, nil
 }
 
-// Encode encodes a byte slice to a modified base32 string.
-func Encode(b []byte) string {
+// Decode decodes a modified base32 string to a byte slice.
+func Decode(b string) ([]byte, error) {
+	output, _, err := decode(b)
+	return output, err
+}
+
+// encode and return check number (0 to 36)
+func encode(b []byte, wantCheck bool) (string, uint8) {
 	x := new(big.Int)
 	x.SetBytes(b)
 
-	answer := make([]byte, 0, len(b)*136/100)
+	mod := uint8(0)
+	if wantCheck {
+		bigMod := new(big.Int)
+		bigMod.Mod(x, big.NewInt(37))
+		mod = uint8(bigMod.Int64())
+	}
+
+	output := make([]byte, 0, len(b)*136/100)
 	for x.Cmp(bigZero) > 0 {
 		mod := new(big.Int)
 		x.DivMod(x, bigRadix, mod)
-		answer = append(answer, alphabet[mod.Int64()])
+		output = append(output, alphabet[mod.Int64()])
 	}
 
 	// leading zero bytes
@@ -64,14 +76,20 @@ func Encode(b []byte) string {
 		if i != 0 {
 			break
 		}
-		answer = append(answer, alphabetIdx0)
+		output = append(output, alphabetIdx0)
 	}
 
 	// reverse
-	alen := len(answer)
+	alen := len(output)
 	for i := 0; i < alen/2; i++ {
-		answer[i], answer[alen-1-i] = answer[alen-1-i], answer[i]
+		output[i], output[alen-1-i] = output[alen-1-i], output[i]
 	}
 
-	return string(answer)
+	return string(output), mod
+}
+
+// Encode encodes a byte slice to a modified base32 string.
+func Encode(b []byte) string {
+	output, _ := encode(b, false)
+	return output
 }
