@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ilius/chunk32/crock32"
+	"github.com/ilius/crock32"
 )
 
 func BenchmarkBase32Encode(b *testing.B) {
